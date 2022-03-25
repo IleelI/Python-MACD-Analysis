@@ -1,5 +1,5 @@
+import sys
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 
 
@@ -7,8 +7,7 @@ EMA = 'EMA'
 DATE = 'Date'
 CLOSE = 'Close'
 INTERSECT = 'Intersect'
-MIN_ENTRIES = 52
-MAX_ENTRIES = 1827
+MIN_ENTRIES = 120
 
 
 def get_soothing_constant(period_length):
@@ -48,13 +47,17 @@ class MACDPointer:
         self.signal_data = None
         self.intersect_points = None
 
-    def load_csv_data(self, file_path, data_size):
+    def load_csv_data(self, file):
         try:
-            self.data = pd.read_csv(file_path)[:][0:data_size]
+            self.data = pd.read_csv(file)
             # convert string values to datetime type from pandas library
             self.data[DATE] = pd.to_datetime(self.data[DATE], format='%Y-%m-%d')
+            if len(self.data) < MIN_ENTRIES:
+                return -1
+            else:
+                return 0
         except Exception as e:
-            print(e)
+            return -1
 
     def set_ema_data(self):
         shorter_period_ema = get_ema_aray(self.data, CLOSE, 12)
@@ -78,37 +81,25 @@ class MACDPointer:
         self.set_macd_data()
         self.set_signal_data()
 
-    # Not working well
-    # def get_intersect_points(self):
-    #     signal = self.signal_data.copy()
-    #     macd = self.macd_data.copy()
-    #     size_difference = len(macd) - len(signal)
-    #     macd = macd[size_difference:]
-    #     intersect_booleans = np.isclose(macd[EMA], signal[EMA], rtol=0.025, atol=0.03)
-    #     intersect_points = signal[EMA][:]
-    #     for idx, intersect_found in enumerate(intersect_booleans):
-    #         intersect_points[idx] = signal[EMA][idx] if intersect_found else None
-    #     self.intersect_points = intersect_points
+    def get_number_of_entries(self):
+        MAX_ENTRIES = len(self.data)
+        print('Welcome, please enter number of entries you wish to analise.')
+        print(f'Acceptable value start from {MIN_ENTRIES} to {MAX_ENTRIES}.')
+        valid_input = False
+        user_input = 0
+        while not valid_input:
+            user_input = int(input('Enter number of entries to load:\t'))
+            if MIN_ENTRIES <= user_input <= MAX_ENTRIES:
+                valid_input = True
+            else:
+                print(f'Invalid value, please enter value from range: [{MIN_ENTRIES}, {MAX_ENTRIES}]\n')
+        self.data = self.data[:][:user_input]
 
     def __str__(self):
         return f'Shorter Period: {len(self.shorter_period_ema)}\n' \
                f'Greater Period: {len(self.greater_period_ema)}\n' \
                f'MACD: {len(self.macd_data)}\n' \
                f'SIGNAL: {len(self.signal_data)}'
-
-
-def get_number_of_entries():
-    print('Welcome, please enter number of entries you wish to analise.')
-    print(f'Acceptable value start from {MIN_ENTRIES} to {MAX_ENTRIES}.')
-    valid_input = False
-    user_input = 0
-    while not valid_input:
-        user_input = int(input('Enter number of entries to load:\t'))
-        if MIN_ENTRIES <= user_input <= MAX_ENTRIES:
-            valid_input = True
-        else:
-            print(f'Invalid value, please enter value from range: [{MIN_ENTRIES}, {MAX_ENTRIES}]\n')
-    return user_input
 
 
 def get_date_tick_step(data_size):
@@ -126,7 +117,8 @@ def get_date_tick_step(data_size):
         return 30
 
 
-def plot_macd_pointer(data, data_size):
+def plot_macd_pointer(data):
+    data_size = len(data.data)
     x_tick_step = get_date_tick_step(data_size)
     data_offset = data_size - len(data.signal_data)
     fig_height = 16
@@ -163,9 +155,15 @@ def plot_macd_pointer(data, data_size):
 
 
 if __name__ == '__main__':
-    number_of_entries = get_number_of_entries()
-    stock_data = MACDPointer()
-    stock_data.load_csv_data('BTC.csv', number_of_entries)
-    stock_data.init_macd_pointer_data()
-    plot_macd_pointer(stock_data, number_of_entries)
-
+    if len(sys.argv) != 2:
+        raise ValueError('Please provide file path to csv file with stock data.')
+    else:
+        file_path = sys.argv[1]
+        stock_data = MACDPointer()
+        if stock_data.load_csv_data(file_path) == 0:
+            stock_data.get_number_of_entries()
+            stock_data.init_macd_pointer_data()
+            plot_macd_pointer(stock_data)
+        else:
+            print(f'Data sample is too small or provided path is invalid,'
+                  f' please provide correct data with at lease {MIN_ENTRIES} entries!')
